@@ -1,0 +1,19 @@
+name: Bug report
+description: Something is wrong with the API, worker, dashboard, or an adapter.
+labels: [bug]
+body:
+  - type: input
+    id: env
+    attributes: { label: Environment, placeholder: "version, deployment (cloud/self-hosted), carriers" }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Steps to reproduce, render: bash }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected vs. actual }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs / request IDs, render: text }

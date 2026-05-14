@@ -1,0 +1,269 @@
+openapi: 3.1.0
+info:
+  title: Unified Shipping VN API
+  version: 0.1.0
+  description: |
+    One API for Vietnamese carriers (GHN, GHTK, J&T, Viettel Post, Ninja Van)
+    with first-class COD reconciliation.
+
+    All amounts are integers in minor units (VND has no minor unit but the wire
+    format keeps the integer envelope for consistency).
+  contact: { email: support@example.com }
+  license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
+servers:
+  - { url: https://api.usv.example.com, description: Production }
+  - { url: https://api.sandbox.usv.example.com, description: Sandbox }
+security:
+  - bearerAuth: []
+tags:
+  - { name: shipments }
+  - { name: rates }
+  - { name: webhooks }
+  - { name: reconciliation }
+  - { name: health }
+
+paths:
+  /v1/healthz:
+    get:
+      tags: [health]
+      security: []
+      summary: Liveness probe
+      responses: { "200": { description: ok } }
+
+  /v1/rates/quote:
+    post:
+      tags: [rates]
+      summary: Quote rates across all configured carriers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RateQuoteRequest" }
+      responses:
+        "200":
+          description: Quotes sorted ascending by fee
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RateQuote" }
+
+  /v1/shipments:
+    post:
+      tags: [shipments]
+      summary: Create a shipment
+      parameters:
+        - { in: header, name: Idempotency-Key, schema: { type: string }, required: false }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateShipmentRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shipment" }
+        "409":
+          description: idempotency_conflict | shipment with merchantOrderId already exists
+
+    get:
+      tags: [shipments]
+      summary: List shipments (cursor pagination)
+      parameters:
+        - { in: query, name: cursor, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: carrier, schema: { type: string } }
+      responses:
+        "200":
+          description: Page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Shipment" } }
+                  nextCursor: { type: string, nullable: true }
+
+  /v1/shipments/{id}:
+    get:
+      tags: [shipments]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Shipment, content: { application/json: { schema: { $ref: "#/components/schemas/Shipment" } } } }
+        "404": { description: not_found }
+
+  /v1/shipments/{id}/cancel:
+    post:
+      tags: [shipments]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string, maxLength: 200 } }
+      responses:
+        "200": { description: Cancelled, content: { application/json: { schema: { $ref: "#/components/schemas/Shipment" } } } }
+
+  /v1/shipments/{id}/tracking:
+    get:
+      tags: [shipments]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Tracking timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  carrierTrackingCode: { type: string }
+                  currentStatus: { type: string }
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        location: { type: string }
+                        note: { type: string }
+
+  /v1/webhook-endpoints:
+    get: { tags: [webhooks], summary: List webhook endpoints, responses: { "200": { description: ok } } }
+    post:
+      tags: [webhooks]
+      summary: Register a webhook endpoint; signing secret returned ONCE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, eventTypes]
+              properties:
+                url: { type: string, format: uri }
+                eventTypes: { type: array, items: { type: string } }
+      responses:
+        "201": { description: Created }
+
+  /v1/reconciliation/summary:
+    get:
+      tags: [reconciliation]
+      summary: Aggregate COD position for the merchant
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shipmentCount: { type: integer }
+                  totalExpected: { type: string }
+                  totalCollected: { type: string }
+                  totalRemitted: { type: string }
+                  outstanding: { type: string }
+                  currency: { type: string, enum: [VND] }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: "usv_live_…" }
+
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, minimum: 0 }
+        currency: { type: string, enum: [VND] }
+
+    AdminCode:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+
+    Address:
+      type: object
+      required: [name, phone, street, ward, district, province]
+      properties:
+        name: { type: string }
+        phone: { type: string, description: "E.164, +84…" }
+        email: { type: string, format: email }
+        street: { type: string }
+        ward: { $ref: "#/components/schemas/AdminCode" }
+        district: { $ref: "#/components/schemas/AdminCode" }
+        province: { $ref: "#/components/schemas/AdminCode" }
+        country: { type: string, enum: [VN] }
+
+    RateQuoteRequest:
+      type: object
+      required: [fromProvinceCode, fromDistrictCode, toProvinceCode, toDistrictCode, weightGrams, declaredValue]
+      properties:
+        fromProvinceCode: { type: string }
+        fromDistrictCode: { type: string }
+        toProvinceCode: { type: string }
+        toDistrictCode: { type: string }
+        toWardCode: { type: string }
+        weightGrams: { type: integer, minimum: 1 }
+        declaredValue: { $ref: "#/components/schemas/Money" }
+        cashOnDelivery: { $ref: "#/components/schemas/Money" }
+        serviceLevel: { type: string, enum: [standard, express, economy, same_day] }
+
+    RateQuote:
+      type: object
+      properties:
+        carrier: { type: string }
+        serviceLevel: { type: string }
+        serviceCode: { type: string }
+        serviceName: { type: string }
+        fee: { $ref: "#/components/schemas/Money" }
+
+    CreateShipmentRequest:
+      type: object
+      required: [merchantOrderId, carrier, pickup, delivery, parcel]
+      properties:
+        merchantOrderId: { type: string }
+        carrier: { type: string, enum: [ghn, ghtk, jnt, viettelpost, ninjavan] }
+        serviceLevel: { type: string }
+        pickup: { $ref: "#/components/schemas/Address" }
+        delivery: { $ref: "#/components/schemas/Address" }
+        parcel:
+          type: object
+          required: [totalWeightGrams, dimensions, items, declaredValue]
+          properties:
+            totalWeightGrams: { type: integer }
+            dimensions:
+              type: object
+              properties:
+                lengthCm: { type: integer }
+                widthCm: { type: integer }
+                heightCm: { type: integer }
+            items: { type: array, items: { type: object } }
+            declaredValue: { $ref: "#/components/schemas/Money" }
+        cashOnDelivery: { $ref: "#/components/schemas/Money" }
+
+    Shipment:
+      type: object
+      properties:
+        id: { type: string }
+        merchantOrderId: { type: string }
+        carrier: { type: string }
+        carrierTrackingCode: { type: string }
+        status: { type: string }
+        shippingFee: { $ref: "#/components/schemas/Money" }
+        totalFee: { $ref: "#/components/schemas/Money" }
+        cashOnDelivery: { $ref: "#/components/schemas/Money" }
+        labelUrl: { type: string }
+        createdAt: { type: string, format: date-time }

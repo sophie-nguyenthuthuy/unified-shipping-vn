@@ -1,0 +1,17 @@
+name: Carrier adapter request / change
+description: Track work on a carrier adapter (mappings, sandbox testing, contract changes).
+labels: [adapter]
+body:
+  - type: dropdown
+    id: carrier
+    attributes:
+      label: Carrier
+      options: [ghn, ghtk, jnt, viettelpost, ninjavan, other]
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes: { label: Scope, description: "Which CarrierAdapter methods are affected?" }
+    validations: { required: true }
+  - type: textarea
+    id: docs
+    attributes: { label: API docs / reference links }

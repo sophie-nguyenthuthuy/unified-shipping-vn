@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/unified-shipping-vn
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 1000m, memory: 768Mi }
+  service:
+    type: ClusterIP
+    port: 80
+
+worker:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 1000m, memory: 1Gi }
+
+dashboard:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: api.usv.example.com
+      paths: ["/"]
+  tls:
+    - secretName: usv-api-tls
+      hosts: [api.usv.example.com]
+
+env:
+  RATE_LIMIT_DEFAULT_RPM: "600"
+
+externalSecrets:
+  enabled: false
+
+postgresql:
+  external: true
+  host: ""
+  database: unified_shipping
+  port: 5432
+
+redis:
+  external: true
+  url: ""

@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: usv
+          POSTGRES_PASSWORD: usv
+          POSTGRES_DB: unified_shipping
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U usv -d unified_shipping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://usv:usv@localhost:5432/unified_shipping?schema=public
+      SHADOW_DATABASE_URL: postgresql://usv:usv@localhost:5432/unified_shipping_shadow?schema=public
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      API_KEY_PEPPER: ci-pepper-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      API_PUBLIC_URL: http://localhost:3000
+      DASHBOARD_PUBLIC_URL: http://localhost:3001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.12.0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.11.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile=false
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm db:generate
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - run: pnpm --filter @usv/db migrate
+      - run: pnpm test:integration
+        if: ${{ false }}  # gate until integration tests are present
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: ${{ matrix.language }} }
+      - uses: github/codeql-action/analyze@v3

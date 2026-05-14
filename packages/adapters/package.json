@@ -1,0 +1,31 @@
+{
+  "name": "@usv/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir test --exclude '**/*.contract.test.ts'",
+    "test:contract": "vitest run --dir test --testNamePattern contract",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@usv/core": "workspace:*",
+    "@usv/observability": "workspace:*",
+    "undici": "^6.19.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "msw": "^2.3.1",
+    "typescript": "^5.5.3",
+    "vitest": "^1.6.0"
+  }
+}

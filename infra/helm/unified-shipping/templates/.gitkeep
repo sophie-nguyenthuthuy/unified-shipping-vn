@@ -1,0 +1,3 @@
+# Templates are intentionally minimal in this scaffold.
+# The chart structure and values.yaml are in place so an operator can copy
+# infra/k8s/* manifests into templates/ as a starting point and parameterize.

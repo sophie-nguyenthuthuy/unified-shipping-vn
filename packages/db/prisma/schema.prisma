@@ -1,0 +1,407 @@
+// Unified Shipping VN — primary data model.
+//
+// Conventions:
+//   - Every tenant-scoped table carries `merchantId` and is indexed on it.
+//     Repository helpers in src/repositories enforce this filter on read.
+//   - Monetary amounts are stored as BigInt minor units (VND has no minor
+//     unit but we keep the int type to stay currency-agnostic).
+//   - All timestamps are stored as `DateTime` in UTC.
+//   - Soft deletes are avoided; we archive via status fields and audit logs.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "metrics"]
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ── Tenancy ─────────────────────────────────────────────────────────────────
+
+model Merchant {
+  id          String   @id
+  name        String
+  legalName   String?
+  taxCode     String?  @unique
+  email       String
+  phone       String?
+  status      MerchantStatus @default(active)
+  plan        String   @default("starter")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  apiKeys         ApiKey[]
+  carrierAccounts CarrierAccount[]
+  shipments       Shipment[]
+  webhookEndpoints WebhookEndpoint[]
+  webhookEvents   WebhookEvent[]
+  codEntries      CodLedgerEntry[]
+  remittances     Remittance[]
+  disputes        ReconciliationDispute[]
+
+  @@index([status])
+  @@map("merchants")
+}
+
+enum MerchantStatus {
+  active
+  suspended
+  closed
+}
+
+model User {
+  id           String   @id
+  merchantId   String
+  email        String
+  passwordHash String
+  role         UserRole @default(member)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, email])
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+// ── API auth ────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id           String   @id
+  merchantId   String
+  /// Argon2id hash of the API key secret. The plain secret is shown to the
+  /// merchant exactly once at creation time and never stored.
+  hash         String   @unique
+  /// First 8 chars of the key, shown in the UI for identification.
+  prefix       String
+  label        String
+  scopes       String[] @default([])
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([prefix])
+  @@map("api_keys")
+}
+
+// ── Carrier accounts (encrypted per-merchant credentials) ──────────────────
+
+model CarrierAccount {
+  id              String   @id
+  merchantId      String
+  carrier         String   // CarrierCode
+  label           String
+  active          Boolean  @default(true)
+  /// Envelope-encrypted JSON of carrier-specific credentials. Decryption
+  /// requires the KMS key referenced by `kmsKeyId`.
+  encryptedSecret Bytes
+  kmsKeyId        String
+  /// Public, non-secret metadata (shop id, sender code, etc).
+  config          Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, carrier, label])
+  @@index([merchantId, carrier])
+  @@map("carrier_accounts")
+}
+
+// ── Shipments ───────────────────────────────────────────────────────────────
+
+model Shipment {
+  id                  String   @id
+  merchantId          String
+  merchantOrderId     String
+  carrier             String
+  carrierAccountId    String
+  carrierTrackingCode String
+  serviceLevel        String
+  serviceCode         String?
+  status              String
+  pickup              Json
+  delivery            Json
+  parcel              Json
+  cashOnDeliveryAmt   BigInt   @default(0)
+  shippingFeeAmt      BigInt   @default(0)
+  insuranceFeeAmt     BigInt   @default(0)
+  codFeeAmt           BigInt   @default(0)
+  totalFeeAmt         BigInt   @default(0)
+  currency            String   @default("VND")
+  labelUrl            String?
+  note                String?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  pickedUpAt          DateTime?
+  deliveredAt         DateTime?
+  cancelledAt         DateTime?
+
+  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  trackingEvents TrackingEvent[]
+  codEntries    CodLedgerEntry[]
+
+  @@unique([merchantId, merchantOrderId])
+  @@unique([carrier, carrierTrackingCode])
+  @@index([merchantId, status, createdAt])
+  @@index([merchantId, carrier, createdAt])
+  @@index([createdAt])
+  @@map("shipments")
+}
+
+model TrackingEvent {
+  id                   String   @id
+  shipmentId           String
+  status               String
+  occurredAt           DateTime
+  location             String?
+  note                 String?
+  carrierRawCode       String?
+  carrierRawDescription String?
+  receivedAt           DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([shipmentId, status, occurredAt, carrierRawCode])
+  @@index([shipmentId, occurredAt])
+  @@map("tracking_events")
+}
+
+// ── Webhooks ────────────────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id          String   @id
+  merchantId  String
+  url         String
+  /// HMAC signing secret, encrypted at rest.
+  secretEnc   Bytes
+  kmsKeyId    String
+  eventTypes  String[]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  merchant   Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([merchantId, active])
+  @@map("webhook_endpoints")
+}
+
+model WebhookEvent {
+  id          String   @id
+  merchantId  String
+  type        String
+  occurredAt  DateTime
+  data        Json
+  createdAt   DateTime @default(now())
+
+  merchant   Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([merchantId, type, occurredAt])
+  @@index([occurredAt])
+  @@map("webhook_events")
+}
+
+model WebhookDelivery {
+  id            String   @id
+  eventId       String
+  endpointId    String
+  attempt       Int      @default(1)
+  status        WebhookDeliveryStatus @default(pending)
+  responseCode  Int?
+  responseBody  String?
+  error         String?
+  nextAttemptAt DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event    WebhookEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, status])
+  @@index([nextAttemptAt])
+  @@map("webhook_deliveries")
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  in_flight
+  delivered
+  failed
+  dead_lettered
+}
+
+// Carrier-to-us inbound webhook ingest ledger (idempotent).
+model InboundWebhook {
+  id              String   @id
+  carrier         String
+  signature       String?
+  payloadHash     String
+  payload         Json
+  /// `accepted` once persisted; `rejected` on signature failure.
+  status          InboundWebhookStatus @default(accepted)
+  errorMessage    String?
+  receivedAt      DateTime @default(now())
+
+  @@unique([carrier, payloadHash])
+  @@index([carrier, receivedAt])
+  @@map("inbound_webhooks")
+}
+
+enum InboundWebhookStatus {
+  accepted
+  rejected
+}
+
+// ── COD ledger & reconciliation ─────────────────────────────────────────────
+
+model CodLedgerEntry {
+  id           String   @id
+  merchantId   String
+  shipmentId   String
+  carrier      String
+  kind         String   // CodEntryKind
+  amount       BigInt
+  currency     String   @default("VND")
+  occurredAt   DateTime
+  remittanceId String?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  merchant    Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  shipment    Shipment     @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  remittance  Remittance?  @relation(fields: [remittanceId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, kind, occurredAt])
+  @@index([shipmentId, kind])
+  @@index([remittanceId])
+  @@map("cod_ledger_entries")
+}
+
+model Remittance {
+  id                 String   @id
+  merchantId         String
+  carrier            String
+  reportPeriodStart  DateTime
+  reportPeriodEnd    DateTime
+  totalGrossAmt      BigInt
+  totalFeesAmt       BigInt
+  totalNetAmt        BigInt
+  currency           String   @default("VND")
+  sourceFilename     String?
+  /// SHA-256 of the imported source file, prevents double import.
+  sourceFileHash     String?
+  importedAt         DateTime @default(now())
+
+  merchant Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  lines    RemittanceLine[]
+  entries  CodLedgerEntry[]
+
+  @@unique([merchantId, carrier, sourceFileHash])
+  @@index([merchantId, carrier, reportPeriodEnd])
+  @@map("remittances")
+}
+
+model RemittanceLine {
+  id                  String   @id
+  remittanceId        String
+  carrierTrackingCode String
+  collectedAmt        BigInt
+  feeAmt              BigInt
+  netAmt              BigInt
+  collectedAt         DateTime?
+  remittedAt          DateTime?
+  matched             Boolean  @default(false)
+  matchedShipmentId   String?
+  /// `unmatched`, `matched`, `amount_mismatch`, `duplicate`, `manual_resolution`
+  matchStatus         String   @default("unmatched")
+
+  remittance Remittance @relation(fields: [remittanceId], references: [id], onDelete: Cascade)
+
+  @@index([remittanceId, matched])
+  @@index([carrierTrackingCode])
+  @@map("remittance_lines")
+}
+
+model ReconciliationDispute {
+  id              String   @id
+  merchantId      String
+  carrier         String
+  shipmentId      String?
+  remittanceLineId String?
+  kind            String  // missing_remittance | amount_mismatch | duplicate | late_remittance
+  expectedAmt     BigInt?
+  actualAmt       BigInt?
+  status          DisputeStatus @default(open)
+  openedAt        DateTime @default(now())
+  resolvedAt      DateTime?
+  resolution      String?
+  notes           Json?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, status, openedAt])
+  @@map("reconciliation_disputes")
+}
+
+enum DisputeStatus {
+  open
+  carrier_contacted
+  awaiting_response
+  resolved
+  written_off
+}
+
+// ── Idempotency, audit, outbox ──────────────────────────────────────────────
+
+model IdempotencyRecord {
+  /// `<merchantId>:<key>`
+  id           String   @id
+  requestHash  String
+  responseCode Int
+  responseBody Json
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  merchantId  String?
+  actorType   String   // user | api_key | system
+  actorId     String?
+  action      String
+  resourceType String
+  resourceId   String?
+  metadata    Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}

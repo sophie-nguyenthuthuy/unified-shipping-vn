@@ -1,0 +1,13 @@
+apiVersion: v2
+name: unified-shipping
+description: Unified Shipping VN — API, worker, and dashboard.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords: [shipping, vietnam, ghn, ghtk, jnt, viettelpost, ninjavan, cod, reconciliation]
+home: https://github.com/unified-shipping-vn
+sources:
+  - https://github.com/unified-shipping-vn
+maintainers:
+  - name: Unified Shipping VN
+    email: maintainers@example.com

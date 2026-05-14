@@ -1,0 +1,52 @@
+{
+  "name": "unified-shipping-vn",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified shipping API + COD reconciliation for Vietnamese carriers (GHN, GHTK, J&T, Viettel Post, Ninja Van).",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint -- --fix",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:contract": "turbo run test:contract",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "db:migrate": "pnpm --filter @usv/db migrate",
+    "db:generate": "pnpm --filter @usv/db generate",
+    "db:seed": "pnpm --filter @usv/db seed",
+    "changeset": "changeset",
+    "release": "changeset publish",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.7",
+    "@types/node": "^20.14.10",
+    "@typescript-eslint/eslint-plugin": "^7.16.1",
+    "@typescript-eslint/parser": "^7.16.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-unused-imports": "^4.0.0",
+    "husky": "^9.1.1",
+    "lint-staged": "^15.2.7",
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.6",
+    "typescript": "^5.5.3",
+    "vitest": "^1.6.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": ["eslint --fix", "prettier --write"],
+    "*.{json,md,yml,yaml}": ["prettier --write"]
+  }
+}
