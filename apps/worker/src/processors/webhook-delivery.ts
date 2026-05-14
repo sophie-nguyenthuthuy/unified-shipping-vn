@@ -1,9 +1,8 @@
-import { Worker, type Job } from "bullmq";
-
 import { createSecretStore, resolveProviderFromEnv, type SecretStore } from "@usv/crypto";
 import { getDb } from "@usv/db";
 import { createLogger, webhookDeliveriesTotal } from "@usv/observability";
 import { MAX_ATTEMPTS, deliverWebhook, nextRetryDelaySeconds } from "@usv/webhooks";
+import type { Queue, Worker, type Job } from "bullmq";
 
 import type { WebhookDeliveryJob } from "../queues.js";
 
@@ -11,6 +10,12 @@ const log = createLogger("worker.webhook-delivery");
 
 export interface WebhookDeliveryWorkerOptions {
   redisUrl: string;
+  /**
+   * The queue to re-enqueue retries onto. Passing it explicitly (rather than
+   * touching `job.queue`, which BullMQ marks protected) lets the worker stay
+   * decoupled from queue-instance management.
+   */
+  retryQueue: Queue<WebhookDeliveryJob>;
 }
 
 let _store: Promise<SecretStore> | null = null;
@@ -95,7 +100,7 @@ export const startWebhookDeliveryWorker = (opts: WebhookDeliveryWorkerOptions) =
           nextAttemptAt: new Date(Date.now() + nextSec * 1000),
         },
       });
-      await job.queue.add(
+      await opts.retryQueue.add(
         "deliver",
         { deliveryId: delivery.id, attempt: nextAttempt },
         { delay: nextSec * 1000 },

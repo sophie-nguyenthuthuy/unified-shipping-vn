@@ -4,11 +4,9 @@ import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import Fastify, { type FastifyInstance } from "fastify";
-
 import type { Env } from "@usv/config";
 import { getDb } from "@usv/db";
-import { createLogger } from "@usv/observability";
+import Fastify, { type FastifyInstance } from "fastify";
 
 import { authPlugin } from "./plugins/auth.js";
 import { errorHandlerPlugin } from "./plugins/error-handler.js";
@@ -29,7 +27,24 @@ export interface BuildServerOptions {
 
 export const buildServer = async ({ env }: BuildServerOptions): Promise<FastifyInstance> => {
   const app = Fastify({
-    logger: createLogger("usv-api", env.LOG_LEVEL),
+    logger: {
+      level: env.LOG_LEVEL,
+      base: { service: "usv-api", env: env.NODE_ENV },
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "req.headers['x-api-key']",
+          "*.password",
+          "*.passwordHash",
+          "*.secret",
+          "*.token",
+          "*.privateKey",
+          "*.encryptedSecret",
+        ],
+        censor: "[REDACTED]",
+      },
+    },
     disableRequestLogging: false,
     bodyLimit: 2 * 1024 * 1024,
     trustProxy: true,

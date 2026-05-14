@@ -1,8 +1,7 @@
-import argon2 from "argon2";
+import { getDb } from "@usv/db";
+import * as argon2 from "argon2";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
-
-import { getDb } from "@usv/db";
 
 const secret = () => new TextEncoder().encode(process.env.JWT_SECRET ?? "");
 const SESSION_COOKIE = "usv_session";
@@ -35,6 +34,8 @@ export async function POST(req: Request) {
     path: "/",
     maxAge: 60 * 60 * 12,
   });
-  void db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
+  void db.user
+    .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+    .catch(() => undefined);
   return res;
 }

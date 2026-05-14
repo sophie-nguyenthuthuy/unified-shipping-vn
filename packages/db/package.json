@@ -7,10 +7,19 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./client": { "types": "./dist/client.d.ts", "import": "./dist/client.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
   },
-  "files": ["dist", "prisma"],
+  "files": [
+    "dist",
+    "prisma"
+  ],
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.json",
     "generate": "prisma generate",
@@ -20,7 +29,7 @@
     "studio": "prisma studio",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
@@ -33,5 +42,7 @@
     "typescript": "^5.5.3",
     "vitest": "^1.6.0"
   },
-  "prisma": { "seed": "node dist/seed.js" }
+  "prisma": {
+    "seed": "node dist/seed.js"
+  }
 }

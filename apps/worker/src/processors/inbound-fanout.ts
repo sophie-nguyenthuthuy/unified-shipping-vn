@@ -1,9 +1,7 @@
-import { Worker } from "bullmq";
-import Redis from "ioredis";
-
 import { newId } from "@usv/core";
 import { getDb } from "@usv/db";
 import { createLogger } from "@usv/observability";
+import { Redis } from "ioredis";
 
 import type { QueueSet } from "../queues.js";
 
@@ -31,7 +29,16 @@ export const startInboundFanoutWorker = (opts: { redisUrl: string; queues: Queue
     while (running) {
       try {
         const res = await redis.xreadgroup(
-          "GROUP", GROUP, CONSUMER, "COUNT", "32", "BLOCK", "5000", "STREAMS", STREAM, ">",
+          "GROUP",
+          GROUP,
+          CONSUMER,
+          "COUNT",
+          "32",
+          "BLOCK",
+          "5000",
+          "STREAMS",
+          STREAM,
+          ">",
         );
         if (!res) continue;
         const streams = res as Array<[string, Array<[string, string[]]>]>;

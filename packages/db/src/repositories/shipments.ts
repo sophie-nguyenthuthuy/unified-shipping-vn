@@ -1,5 +1,4 @@
-import type { PrismaClient, Prisma } from "@prisma/client";
-
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { ShipmentStatus } from "@usv/core";
 
 import type { TxClient } from "../tx.js";
@@ -50,7 +49,10 @@ export interface UpdateShipmentStatusInput {
   pickedUpAt?: Date;
 }
 
-export const updateShipmentStatus = (client: PrismaClient | TxClient, input: UpdateShipmentStatusInput) =>
+export const updateShipmentStatus = (
+  client: PrismaClient | TxClient,
+  input: UpdateShipmentStatusInput,
+) =>
   client.shipment.update({
     where: { id: input.id },
     data: {

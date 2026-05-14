@@ -54,13 +54,23 @@ export class UsvError extends Error {
 }
 
 export const ValidationError = (message: string, details?: Record<string, unknown>) =>
-  new UsvError({ code: "validation_failed", httpStatus: 422, message, details });
+  new UsvError({
+    code: "validation_failed",
+    httpStatus: 422,
+    message,
+    ...(details ? { details } : {}),
+  });
 
 export const NotFoundError = (resource: string) =>
   new UsvError({ code: "not_found", httpStatus: 404, message: `${resource} not found` });
 
 export const ConflictError = (message: string, details?: Record<string, unknown>) =>
-  new UsvError({ code: "conflict", httpStatus: 409, message, details });
+  new UsvError({
+    code: "conflict",
+    httpStatus: 409,
+    message,
+    ...(details ? { details } : {}),
+  });
 
 export const AuthenticationError = (message = "authentication failed") =>
   new UsvError({ code: "authentication_failed", httpStatus: 401, message });
@@ -78,7 +88,13 @@ export const RateLimitedError = (retryAfterSec: number) =>
   });
 
 export const CarrierError = (message: string, details?: Record<string, unknown>) =>
-  new UsvError({ code: "carrier_error", httpStatus: 502, message, details, retryable: true });
+  new UsvError({
+    code: "carrier_error",
+    httpStatus: 502,
+    message,
+    ...(details ? { details } : {}),
+    retryable: true,
+  });
 
 export const CarrierUnavailableError = (carrier: string) =>
   new UsvError({

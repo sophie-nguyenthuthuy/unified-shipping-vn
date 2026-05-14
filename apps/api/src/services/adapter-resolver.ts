@@ -1,6 +1,3 @@
-import type { CarrierAccount } from "@prisma/client";
-import type { FastifyInstance } from "fastify";
-
 import {
   GhnAdapter,
   GhtkAdapter,
@@ -11,6 +8,8 @@ import {
   type CarrierAdapter,
 } from "@usv/adapters";
 import type { CarrierCode } from "@usv/core";
+import type { CarrierAccount } from "@usv/db";
+import type { FastifyInstance } from "fastify";
 
 import { getSecretStore } from "./secret-store.js";
 

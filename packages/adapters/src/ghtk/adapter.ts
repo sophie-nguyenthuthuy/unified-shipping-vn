@@ -11,6 +11,7 @@ import {
   type RateQuote,
   type RateQuoteRequest,
   type ShipmentStatus,
+  type TrackingEvent,
   type TrackingTimeline,
   type WebhookEvent,
 } from "@usv/core";
@@ -210,16 +211,14 @@ export class GhtkAdapter implements CarrierAdapter {
     }
     const order = res.order;
     const currentStatus = mapGhtkStatus(order.status);
-    const events = (order.log ?? [])
-      .map((l) => ({
+    const events: TrackingEvent[] = (order.log ?? [])
+      .map<TrackingEvent>((l) => ({
         // GHTK log entries don't carry a numeric status_id, only `action`
         // text. Map the informative cases; otherwise inherit the current
         // shipment status so the timeline stays monotonic.
         status: inferStatusFromLog(l.action, currentStatus),
         occurredAt: parseGhtkDate(l.action_time),
-        location: undefined,
         note: l.status_text ?? l.reason,
-        carrierRawCode: undefined,
         carrierRawDescription: l.action,
       }))
       .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
@@ -230,7 +229,6 @@ export class GhtkAdapter implements CarrierAdapter {
       events.push({
         status: currentStatus,
         occurredAt: parseGhtkDate(order.modified),
-        location: undefined,
         note: order.status_text,
         carrierRawCode: order.status,
         carrierRawDescription: order.message,
@@ -272,7 +270,9 @@ export class GhtkAdapter implements CarrierAdapter {
 
     const payload = JSON.parse(input.rawBody.toString("utf8")) as GhtkWebhookPayload;
     const status: ShipmentStatus = mapGhtkStatus(payload.status_id);
-    const occurredAt = payload.action_time ? parseGhtkDate(payload.action_time) : new Date().toISOString();
+    const occurredAt = payload.action_time
+      ? parseGhtkDate(payload.action_time)
+      : new Date().toISOString();
 
     const event: WebhookEvent = {
       id: newId("webhookEvent"),

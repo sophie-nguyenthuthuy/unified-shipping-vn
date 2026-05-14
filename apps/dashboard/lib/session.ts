@@ -1,6 +1,6 @@
+import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "usv_session";
 

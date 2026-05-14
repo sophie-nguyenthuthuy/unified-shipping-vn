@@ -28,7 +28,13 @@ export interface RemittanceLine {
 
 export type LineClassification =
   | { kind: "matched"; shipmentId: string; lineId: string }
-  | { kind: "amount_mismatch"; shipmentId: string; lineId: string; expectedMinor: bigint; actualMinor: bigint }
+  | {
+      kind: "amount_mismatch";
+      shipmentId: string;
+      lineId: string;
+      expectedMinor: bigint;
+      actualMinor: bigint;
+    }
   | { kind: "duplicate"; lineIds: string[]; shipmentId: string }
   | { kind: "unmatched_line"; lineId: string }
   | { kind: "unmatched_expected"; shipmentId: string; carrierTrackingCode: string };
@@ -64,13 +70,18 @@ export const matchRemittance = (
       continue;
     }
     if (group.length > 1) {
-      results.push({ kind: "duplicate", lineIds: group.map((l) => l.id), shipmentId: exp.shipmentId });
+      results.push({
+        kind: "duplicate",
+        lineIds: group.map((l) => l.id),
+        shipmentId: exp.shipmentId,
+      });
       group.forEach((l) => matchedLineIds.add(l.id));
       continue;
     }
     const line = group[0]!;
     const delta = line.collectedMinor - exp.amountMinor;
-    if (delta > -tolerance && delta < tolerance) {
+    const absDelta = delta < 0n ? -delta : delta;
+    if (absDelta <= tolerance) {
       results.push({ kind: "matched", shipmentId: exp.shipmentId, lineId: line.id });
     } else {
       results.push({
@@ -86,7 +97,11 @@ export const matchRemittance = (
 
   for (const [code, exp] of expectedByCode) {
     if (!linesByCode.has(code)) {
-      results.push({ kind: "unmatched_expected", shipmentId: exp.shipmentId, carrierTrackingCode: code });
+      results.push({
+        kind: "unmatched_expected",
+        shipmentId: exp.shipmentId,
+        carrierTrackingCode: code,
+      });
     }
   }
 

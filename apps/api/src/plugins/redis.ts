@@ -1,5 +1,5 @@
 import fp from "fastify-plugin";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 
 export interface RedisPluginOptions {
   url: string;
@@ -17,7 +17,7 @@ export const redisPlugin = fp<RedisPluginOptions>(async (app, opts) => {
     enableOfflineQueue: false,
     lazyConnect: false,
   });
-  client.on("error", (err) => app.log.error({ err }, "redis error"));
+  client.on("error", (err: Error) => app.log.error({ err }, "redis error"));
 
   app.decorate("redis", client);
   app.addHook("onClose", async () => {
