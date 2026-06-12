@@ -30,6 +30,7 @@
     "@usv/observability": "workspace:*",
     "@usv/reconciliation": "workspace:*",
     "@usv/webhooks": "workspace:*",
+    "dotenv": "^17.4.2",
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",
     "ioredis": "^5.4.1",

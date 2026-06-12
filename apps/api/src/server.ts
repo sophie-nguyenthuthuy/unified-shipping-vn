@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { loadEnv } from "@usv/config";
 import { startTelemetry } from "@usv/observability";
 
