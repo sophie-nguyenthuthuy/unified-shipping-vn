@@ -27,7 +27,7 @@
     "@usv/core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.5.3",
+    "typescript": "^6.0.3",
     "vitest": "^1.6.0"
   }
 }
